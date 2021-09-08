@@ -1,0 +1,22 @@
+# NAME		Relative path
+#
+#HWDEF		HWDEF
+package-file	package-file
+parameter	parameter.txt			
+boot1		boot.img
+rootfs1		rootfs.img
+imu_mcu     imu_mcu.bin
+imuExt_mcu  imuExt_mcu.bin
+power_mcu   power_mcu.bin
+toc0        toc0.fex
+toc1        toc1.fex
+boot_md5sum	boot_md5sum
+rootfs_md5sum	rootfs_md5sum
+imu_mcu_md5sum    imu_mcu_md5sum
+imuExt_mcu_md5sum imuExt_mcu_md5sum
+power_mcu_md5sum  power_mcu_md5sum
+before_upgrade.sh before_upgrade.sh
+after_upgrade.sh after_upgrade.sh
+
+
+

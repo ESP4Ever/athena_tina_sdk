@@ -1,0 +1,1 @@
+/home/xuquan/work/aw/Tina-MR813-OPEN/lichee/brandy-2.0/spl/board/sun50iw10p1/commit_info.h

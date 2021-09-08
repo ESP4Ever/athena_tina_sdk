@@ -1,0 +1,58 @@
+From 34ab76bdae9863d5e8375b34c231b3466f3f108e Mon Sep 17 00:00:00 2001
+From: huangshr <huangshr@allwinnertech.com>
+Date: Fri, 23 Oct 2020 11:28:57 +0800
+Subject: [PATCH 4/4] r818: rt-preempt: fix nand and gpu compile error.
+
+Signed-off-by: huangshr <huangshr@allwinnertech.com>
+Change-Id: Ia36e001bafef9058ee54c8e6ead8176cbbdd8c19
+Signed-off-by: huangshr <huangshr@allwinnertech.com>
+---
+ .../gpu/img-rgx/linux/rogue_km/services/include/shared/lock.h | 4 ++--
+ .../img-rgx/linux/rogue_km/services/server/include/osfunc.h   | 2 +-
+ modules/nand/common1/nfd/nand_dev.c                           | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/modules/gpu/img-rgx/linux/rogue_km/services/include/shared/lock.h b/modules/gpu/img-rgx/linux/rogue_km/services/include/shared/lock.h
+index ebae79da6b2d..22de5d7c747a 100644
+--- a/modules/gpu/img-rgx/linux/rogue_km/services/include/shared/lock.h
++++ b/modules/gpu/img-rgx/linux/rogue_km/services/include/shared/lock.h
+@@ -64,8 +64,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ 	*(phLock) = OSAllocMem(sizeof(struct mutex)); \
+ 	if (*(phLock)) { mutex_init(*(phLock)); e = PVRSRV_OK; }; \
+ 	e;})
+-#define OSLockDestroy(hLock) ({mutex_destroy((hLock)); OSFreeMem((hLock)); PVRSRV_OK;})
+-#define OSLockDestroyNoStats(hLock) ({mutex_destroy((hLock)); OSFreeMemNoStats((hLock)); PVRSRV_OK;})
++#define OSLockDestroy(hLock) ({mutex_destroy((struct mutex *)(hLock)); OSFreeMem((hLock)); PVRSRV_OK;})
++#define OSLockDestroyNoStats(hLock) ({mutex_destroy((struct mutex *)(hLock)); OSFreeMemNoStats((hLock)); PVRSRV_OK;})
+ 
+ #define OSLockAcquire(hLock) ({mutex_lock((hLock)); PVRSRV_OK;})
+ #define OSLockAcquireNested(hLock, subclass) ({mutex_lock_nested((hLock), (subclass)); PVRSRV_OK;})
+diff --git a/modules/gpu/img-rgx/linux/rogue_km/services/server/include/osfunc.h b/modules/gpu/img-rgx/linux/rogue_km/services/server/include/osfunc.h
+index 9915a99cdad0..9ab32c9e358e 100644
+--- a/modules/gpu/img-rgx/linux/rogue_km/services/server/include/osfunc.h
++++ b/modules/gpu/img-rgx/linux/rogue_km/services/server/include/osfunc.h
+@@ -1457,7 +1457,7 @@ typedef spinlock_t *POS_SPINLOCK;
+ #define OSSpinLockDestroy(_psLock) ({OSFreeMem(_psLock);})
+ 
+ #define OSSpinLockAcquire(_pLock, _pFlags) {unsigned long *p = (unsigned long *)_pFlags; spin_lock_irqsave(_pLock, *p);}
+-#define OSSpinLockRelease(_pLock, _flags)  {spin_unlock_irqrestore(_pLock, _flags);}
++#define OSSpinLockRelease(_pLock, _flags)  {spin_unlock_irqrestore(_pLock, (unsigned long)_flags);}
+ 
+ #elif defined(LINUX) || defined(__QNXNTO__) || defined (INTEGRITY_OS)
+ /* User-mode unit tests use these definitions on Linux */
+diff --git a/modules/nand/common1/nfd/nand_dev.c b/modules/nand/common1/nfd/nand_dev.c
+index e472bbc1e7da..5bf7030896b1 100644
+--- a/modules/nand/common1/nfd/nand_dev.c
++++ b/modules/nand/common1/nfd/nand_dev.c
+@@ -271,7 +271,7 @@ int add_nand(struct nand_blk_ops *tr, struct _nand_phy_partition *phy_partition)
+ 	if (!nftl_blk->blk_lock)
+ 		return -ENOMEM;
+ 
+-	mutex_init(nftl_blk->blk_lock);
++	mutex_init((struct mutex *)nftl_blk->blk_lock);
+ 
+ 	nftl_blk->nftl_thread =
+ 	    kthread_run(nftl_thread, nftl_blk, "%sd", "nftl");
+-- 
+2.28.0
+

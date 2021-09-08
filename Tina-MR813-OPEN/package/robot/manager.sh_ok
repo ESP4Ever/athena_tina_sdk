@@ -1,0 +1,8 @@
+#!/bin/sh
+
+sleep 5
+
+killall -9 manager
+
+/mnt/UDISK/manager /mnt/UDISK/robot-software/build > /mnt/UDISK/manager/manager.log &
+

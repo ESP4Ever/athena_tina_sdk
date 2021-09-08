@@ -1,0 +1,167 @@
+From c16c873c8139086b08d539a6805eae88f0c892ba Mon Sep 17 00:00:00 2001
+From: huangshr <huangshr@allwinnertech.com>
+Date: Fri, 23 Oct 2020 16:36:24 +0800
+Subject: [PATCH 2/4] r818: rt-preempt: sync drm driver based on 5703ac commit.
+
+Signed-off-by: huangshr <huangshr@allwinnertech.com>
+Change-Id: I11c2d49c94e47451d7578385a9564f9bf297fcae
+Signed-off-by: huangshr <huangshr@allwinnertech.com>
+---
+ drivers/gpu/drm/i915/i915_gem_execbuffer.c |  2 --
+ drivers/gpu/drm/i915/i915_gem_shrinker.c   |  2 +-
+ drivers/gpu/drm/i915/i915_irq.c            |  2 --
+ drivers/gpu/drm/i915/intel_display.c       |  2 +-
+ drivers/gpu/drm/i915/intel_sprite.c        | 11 ++++-------
+ drivers/gpu/drm/msm/msm_gem_shrinker.c     |  2 +-
+ drivers/gpu/drm/radeon/radeon_display.c    |  2 --
+ 7 files changed, 7 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/i915_gem_execbuffer.c b/drivers/gpu/drm/i915/i915_gem_execbuffer.c
+index 96c15501b0c8..2117f172d7a2 100644
+--- a/drivers/gpu/drm/i915/i915_gem_execbuffer.c
++++ b/drivers/gpu/drm/i915/i915_gem_execbuffer.c
+@@ -1489,9 +1489,7 @@ execbuf_submit(struct i915_execbuffer_params *params,
+ 	if (ret)
+ 		return ret;
+ 
+-#ifndef CONFIG_PREEMPT_RT_BASE
+ 	trace_i915_gem_ring_dispatch(params->request, params->dispatch_flags);
+-#endif
+ 
+ 	i915_gem_execbuffer_move_to_active(vmas, params->request);
+ 
+diff --git a/drivers/gpu/drm/i915/i915_gem_shrinker.c b/drivers/gpu/drm/i915/i915_gem_shrinker.c
+index 97fb03dc4971..755d78832a66 100644
+--- a/drivers/gpu/drm/i915/i915_gem_shrinker.c
++++ b/drivers/gpu/drm/i915/i915_gem_shrinker.c
+@@ -40,7 +40,7 @@ static bool mutex_is_locked_by(struct mutex *mutex, struct task_struct *task)
+ 	if (!mutex_is_locked(mutex))
+ 		return false;
+ 
+-#if (defined(CONFIG_DEBUG_MUTEXES) || defined(CONFIG_MUTEX_SPIN_ON_OWNER)) && !defined(CONFIG_PREEMPT_RT_BASE)
++#if defined(CONFIG_DEBUG_MUTEXES) || defined(CONFIG_MUTEX_SPIN_ON_OWNER)
+ 	return mutex->owner == task;
+ #else
+ 	/* Since UP may be pre-empted, we cannot assume that we own the lock */
+diff --git a/drivers/gpu/drm/i915/i915_irq.c b/drivers/gpu/drm/i915/i915_irq.c
+index df3eefde21fa..685247c3d489 100644
+--- a/drivers/gpu/drm/i915/i915_irq.c
++++ b/drivers/gpu/drm/i915/i915_irq.c
+@@ -812,7 +812,6 @@ static int i915_get_crtc_scanoutpos(struct drm_device *dev, unsigned int pipe,
+ 	spin_lock_irqsave(&dev_priv->uncore.lock, irqflags);
+ 
+ 	/* preempt_disable_rt() should go right here in PREEMPT_RT patchset. */
+-	preempt_disable_rt();
+ 
+ 	/* Get optional system timestamp before query. */
+ 	if (stime)
+@@ -864,7 +863,6 @@ static int i915_get_crtc_scanoutpos(struct drm_device *dev, unsigned int pipe,
+ 		*etime = ktime_get();
+ 
+ 	/* preempt_enable_rt() should go right here in PREEMPT_RT patchset. */
+-	preempt_enable_rt();
+ 
+ 	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
+ 
+diff --git a/drivers/gpu/drm/i915/intel_display.c b/drivers/gpu/drm/i915/intel_display.c
+index 7cbb79920d87..d915877b6ecb 100644
+--- a/drivers/gpu/drm/i915/intel_display.c
++++ b/drivers/gpu/drm/i915/intel_display.c
+@@ -12139,7 +12139,7 @@ void intel_check_page_flip(struct drm_i915_private *dev_priv, int pipe)
+ 	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
+ 	struct intel_flip_work *work;
+ 
+-	WARN_ON_NONRT(!in_interrupt());
++	WARN_ON(!in_interrupt());
+ 
+ 	if (crtc == NULL)
+ 		return;
+diff --git a/drivers/gpu/drm/i915/intel_sprite.c b/drivers/gpu/drm/i915/intel_sprite.c
+index aebf1e9eabcb..64f4e2e18594 100644
+--- a/drivers/gpu/drm/i915/intel_sprite.c
++++ b/drivers/gpu/drm/i915/intel_sprite.c
+@@ -35,7 +35,6 @@
+ #include <drm/drm_rect.h>
+ #include <drm/drm_atomic.h>
+ #include <drm/drm_plane_helper.h>
+-#include <linux/locallock.h>
+ #include "intel_drv.h"
+ #include "intel_frontbuffer.h"
+ #include <drm/i915_drm.h>
+@@ -66,8 +65,6 @@ int intel_usecs_to_scanlines(const struct drm_display_mode *adjusted_mode,
+ 			    1000 * adjusted_mode->crtc_htotal);
+ }
+ 
+-static DEFINE_LOCAL_IRQ_LOCK(pipe_update_lock);
+-
+ /**
+  * intel_pipe_update_start() - start update of a set of display registers
+  * @crtc: the crtc of which the registers are going to be updated
+@@ -101,7 +98,7 @@ void intel_pipe_update_start(struct intel_crtc *crtc)
+ 	min = vblank_start - intel_usecs_to_scanlines(adjusted_mode, 100);
+ 	max = vblank_start - 1;
+ 
+-	local_lock_irq(pipe_update_lock);
++	local_irq_disable();
+ 
+ 	if (min <= 0 || max <= 0)
+ 		return;
+@@ -131,11 +128,11 @@ void intel_pipe_update_start(struct intel_crtc *crtc)
+ 			break;
+ 		}
+ 
+-		local_unlock_irq(pipe_update_lock);
++		local_irq_enable();
+ 
+ 		timeout = schedule_timeout(timeout);
+ 
+-		local_lock_irq(pipe_update_lock);
++		local_irq_disable();
+ 	}
+ 
+ 	finish_wait(wq, &wait);
+@@ -205,7 +202,7 @@ void intel_pipe_update_end(struct intel_crtc *crtc, struct intel_flip_work *work
+ 		crtc->base.state->event = NULL;
+ 	}
+ 
+-	local_unlock_irq(pipe_update_lock);
++	local_irq_enable();
+ 
+ 	if (crtc->debug.start_vbl_count &&
+ 	    crtc->debug.start_vbl_count != end_vbl_count) {
+diff --git a/drivers/gpu/drm/msm/msm_gem_shrinker.c b/drivers/gpu/drm/msm/msm_gem_shrinker.c
+index d5372a207326..192b2d3a79cb 100644
+--- a/drivers/gpu/drm/msm/msm_gem_shrinker.c
++++ b/drivers/gpu/drm/msm/msm_gem_shrinker.c
+@@ -23,7 +23,7 @@ static bool mutex_is_locked_by(struct mutex *mutex, struct task_struct *task)
+ 	if (!mutex_is_locked(mutex))
+ 		return false;
+ 
+-#if (defined(CONFIG_SMP) || defined(CONFIG_DEBUG_MUTEXES)) && !defined(CONFIG_PREEMPT_RT_BASE)
++#if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_MUTEXES)
+ 	return mutex->owner == task;
+ #else
+ 	/* Since UP may be pre-empted, we cannot assume that we own the lock */
+diff --git a/drivers/gpu/drm/radeon/radeon_display.c b/drivers/gpu/drm/radeon/radeon_display.c
+index 56cfd2bd76c7..8b6f8aa23806 100644
+--- a/drivers/gpu/drm/radeon/radeon_display.c
++++ b/drivers/gpu/drm/radeon/radeon_display.c
+@@ -1851,7 +1851,6 @@ int radeon_get_crtc_scanoutpos(struct drm_device *dev, unsigned int pipe,
+ 	struct radeon_device *rdev = dev->dev_private;
+ 
+ 	/* preempt_disable_rt() should go right here in PREEMPT_RT patchset. */
+-	preempt_disable_rt();
+ 
+ 	/* Get optional system timestamp before query. */
+ 	if (stime)
+@@ -1944,7 +1943,6 @@ int radeon_get_crtc_scanoutpos(struct drm_device *dev, unsigned int pipe,
+ 		*etime = ktime_get();
+ 
+ 	/* preempt_enable_rt() should go right here in PREEMPT_RT patchset. */
+-	preempt_enable_rt();
+ 
+ 	/* Decode into vertical and horizontal scanout position. */
+ 	*vpos = position & 0x1fff;
+-- 
+2.28.0
+
